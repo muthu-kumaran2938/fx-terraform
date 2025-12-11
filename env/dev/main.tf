@@ -9,7 +9,7 @@ module "vpc" {
   azs             = ["us-east-1a", "us-east-1b"]
 }
 module "sg" {
-  source = "../../modules/sg"
+  source = "../../modules/security-group"
 
   env      = "dev"
   vpc_id   = module.vpc.vpc_id
@@ -82,50 +82,7 @@ module "ec2_private_2" {
 # --------------------------
 # 2 Public EC2
 # --------------------------
-module "ec2_public_1" {
-  source = "../../modules/ec2"
 
-  env    = "dev"
-  name   = "pub-1"
-
-  subnet_id       = module.vpc.public_subnets[0]
-  sg_id           = module.sg.public_sg_id
-
-  key_secret_name = module.ec2_key_secret.secret_id
-}
-
-module "ec2_public_2" {
-  source = "../../modules/ec2"
-  env    = "dev"
-  name   = "pub-2"
-
-  subnet_id       = module.vpc.public_subnets[1]
-  sg_id           = module.sg.public_sg_id
-  key_secret_name = module.ec2_key_secret.secret_id
-}
-
-# --------------------------
-# 2 Private EC2
-# --------------------------
-module "ec2_private_1" {
-  source = "../../modules/ec2"
-  env    = "dev"
-  name   = "pri-1"
-
-  subnet_id       = module.vpc.private_subnets[0]
-  sg_id           = module.sg.private_sg_id
-  key_secret_name = module.ec2_key_secret.secret_id
-}
-
-module "ec2_private_2" {
-  source = "../../modules/ec2"
-  env    = "dev"
-  name   = "pri-2"
-
-  subnet_id       = module.vpc.private_subnets[1]
-  sg_id           = module.sg.private_sg_id
-  key_secret_name = module.ec2_key_secret.secret_id
-}
 module "iam" {
   source = "../../modules/iam"
 
@@ -213,7 +170,7 @@ module "rds" {
 
 # Route53 private hosted zone
 module "route53" {
-  source = "../../modules/route53"
+  source = "../../modules/r53"
   zone_name = "internal.fdx.local"
   vpc_id = module.vpc.vpc_id
   tags = { Project = "fedex", Env = "dev" }
@@ -241,7 +198,7 @@ module "acm" {
 }
 # Ensure ALB gets the certificate ARN from ACM
 module "alb" {
-  source = "../../modules/alb-internal"
+  source = "../../modules/internal-alb"
   name = "fdx-internal"
   subnets = module.vpc.public_subnets
   security_groups = [module.sg.public_sg_id]
@@ -275,7 +232,7 @@ resource "aws_security_group" "endpoint_sg" {
   ingress { from_port=443; to_port=443; protocol="tcp"; cidr_blocks=[module.vpc.vpc_cidr] }
 }
 module "vpc_endpoints" {
-  source = "../../modules/vpc-endpoints"
+  source = "../../modules/vpc-endpoint"
   vpc_id = module.vpc.vpc_id
   region = "ap-south-1"
   subnet_ids = module.vpc.private_subnets
@@ -295,7 +252,7 @@ module "eks" {
 }
 # EKS managed node groups
 module "eks_nodegroups" {
-  source = "../../modules/eks-nodegroup"
+  source = "../../modules/node-group"
 
   cluster_name = module.eks.cluster_name
   node_role_arn = module.iam.eks_node_role_arn   # from iam module
