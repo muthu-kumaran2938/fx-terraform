@@ -10,7 +10,9 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git branch: "${env.BRANCH_NAME}", url: 'https://github.com/Iam-mithran/Trial'
+                git url: 'git@github.com:muthu-kumaran2938/mahe-infrapipeline.git',
+                    branch: "${env.BRANCH_NAME}",
+                    credentialsId: 'git-ssh-key'
             }
         }
 
@@ -51,6 +53,5 @@ pipeline {
                 }
             }
         }
-
     }
 }
