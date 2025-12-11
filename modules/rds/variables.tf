@@ -13,3 +13,32 @@ variable "databases" {
     deletion_protection = optional(bool, false)
   }))
 }
+variable "env" {
+  type        = string
+  description = "Environment (dev/prod/etc)"
+}
+
+variable "private_subnet_ids" {
+  type        = list(string)
+  description = "Private subnets for RDS"
+}
+
+variable "db_security_group_ids" {
+  type        = list(string)
+  description = "Security groups for RDS"
+}
+
+variable "databases" {
+  type        = map(object({
+    db_name   : string
+    secret_arn: string
+  }))
+  description = "Databases and corresponding secrets"
+}
+
+variable "tags" {
+  type        = map(string)
+  description = "Tags for RDS resources"
+  default     = {}
+}
+
