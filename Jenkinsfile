@@ -3,14 +3,16 @@ pipeline {
 
     environment {
         ENV = "${env.BRANCH_NAME}"
-        TF_WORKDIR = "environments/${env.BRANCH_NAME}"
+        TF_WORKDIR = "env/${env.BRANCH_NAME}"
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                git branch: "${env.BRANCH_NAME}", url: 'https://github.com/Iam-mithran/Trial'
+                git url: 'git@github.com:muthu-kumaran2938/fx-terraform.git',
+                    branch: "${env.BRANCH_NAME}",
+                    credentialsId: 'git-ssh-key'
             }
         }
 
@@ -51,6 +53,5 @@ pipeline {
                 }
             }
         }
-
     }
 }
