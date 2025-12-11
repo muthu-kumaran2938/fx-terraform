@@ -293,6 +293,3 @@ module "eks_nodegroups" {
 ##########################################################
 # Outputs
 ##########################################################
-output "eks_kubeconfig_file" {
-  value = "${module.eks.kubeconfig_path}/${module.eks.cluster_name}_kubeconfig"
-}
