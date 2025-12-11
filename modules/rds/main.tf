@@ -1,10 +1,15 @@
+###########################################################
+# RDS Subnet Group
+###########################################################
 resource "aws_db_subnet_group" "this" {
   name       = "${var.env}-rds-subnet-group"
   subnet_ids = var.private_subnet_ids
   tags       = merge(var.tags, { Name = "${var.env}-rds-subnet-group" })
 }
 
-# For each DB, read credentials from Secrets Manager if secret_arn is provided
+###########################################################
+# Fetch Secrets from Secrets Manager if secret_arn is provided
+###########################################################
 data "aws_secretsmanager_secret_version" "db_secrets" {
   for_each = {
     for k, v in var.databases : k => v
@@ -13,6 +18,9 @@ data "aws_secretsmanager_secret_version" "db_secrets" {
   secret_id = each.value.secret_arn
 }
 
+###########################################################
+# RDS Instances
+###########################################################
 resource "aws_db_instance" "this" {
   for_each = var.databases
 
@@ -23,7 +31,7 @@ resource "aws_db_instance" "this" {
   allocated_storage  = lookup(each.value, "storage", 20)
   name               = lookup(each.value, "db_name", each.key)
 
-  # username & password: prefer secret if provided, else use username/password fields
+  # Credentials: prefer Secrets Manager if secret_arn provided
   username = lookup(each.value, "username",
     (
       contains(keys(each.value),"secret_arn") && each.value.secret_arn != "" ?
@@ -46,5 +54,6 @@ resource "aws_db_instance" "this" {
   skip_final_snapshot   = lookup(each.value, "skip_final_snapshot", true)
   publicly_accessible   = false
   deletion_protection   = lookup(each.value, "deletion_protection", false)
+
   tags = merge(var.tags, { Service = each.key })
 }
