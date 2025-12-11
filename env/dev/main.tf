@@ -24,17 +24,6 @@ module "ec2_key_secret" {
   secret_name  = "red-ec2"
   secret_value = "red-ec2"    # the actual keypair name
 }
-module "ec2_public_1" {
-  source = "../../modules/ec2"
-
-  env    = "dev"
-  name   = "pub-1"
-
-  subnet_id       = module.vpc.public_subnets[0]
-  sg_id           = module.sg.public_sg_id
-
-  key_secret_name = module.ec2_key_secret.secret_id
-}
 
 module "ec2_public_1" {
   source = "../../modules/ec2"
@@ -210,16 +199,7 @@ module "alb" {
 }
 
 # Route53 alias record to ALB (private)
-resource "aws_route53_record" "api_alias" {
-  zone_id = module.route53.zone_id
-  name    = "api.internal.fdx.local"
-  type    = "A"
-  alias {
-    name = module.alb.alb_dns_name
-    zone_id = module.alb.alb_zone_id
-    evaluate_target_health = false
-  }
-}
+
 
 # Internal ALB
 
