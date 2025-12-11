@@ -10,7 +10,7 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git url: 'git@github.com:muthu-kumaran2938/mahe-infrapipeline.git',
+                git url: 'git@github.com:muthu-kumaran2938/fx-terraform.git',
                     branch: "${env.BRANCH_NAME}",
                     credentialsId: 'git-ssh-key'
             }
