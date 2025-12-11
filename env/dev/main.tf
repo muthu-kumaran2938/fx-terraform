@@ -1,30 +1,39 @@
+##########################################################
+# VPC Module
+##########################################################
 module "vpc" {
   source = "../../modules/vpc"
 
   env             = "dev"
   vpc_cidr        = "10.0.0.0/16"
-
   public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnets = ["10.0.3.0/24", "10.0.4.0/24"]
   azs             = ["us-east-1a", "us-east-1b"]
 }
-module "sg" {
-  source = "../../modules/security-group"
 
-  env      = "dev"
-  vpc_id   = module.vpc.vpc_id
-  vpc_cidr = "10.0.0.0/16"
+##########################################################
+# Security Group Module
+##########################################################
+module "sg" {
+  source  = "../../modules/security-group"
+  env     = "dev"
+  vpc_id  = module.vpc.vpc_id
+  vpc_cidr = module.vpc.vpc_cidr
 }
 
-
+##########################################################
+# EC2 Key Secret Module
+##########################################################
 module "ec2_key_secret" {
-  source = "../../modules/secrets"
-
+  source       = "../../modules/secrets"
   env          = "dev"
   secret_name  = "red-ec2"
-  secret_value = "red-ec2"    # the actual keypair name
+  secret_value = "red-ec2"
 }
 
+##########################################################
+# EC2 Modules
+##########################################################
 module "ec2_public_1" {
   source = "../../modules/ec2"
   env    = "dev"
@@ -33,9 +42,9 @@ module "ec2_public_1" {
   subnet_id           = module.vpc.public_subnets[0]
   sg_id               = module.sg.public_sg_id
   iam_instance_profile = module.iam.ec2_instance_profile
-
   key_secret_name      = module.ec2_key_secret.secret_id
 }
+
 module "ec2_public_2" {
   source = "../../modules/ec2"
   env    = "dev"
@@ -46,6 +55,7 @@ module "ec2_public_2" {
   iam_instance_profile = module.iam.ec2_instance_profile
   key_secret_name      = module.ec2_key_secret.secret_id
 }
+
 module "ec2_private_1" {
   source = "../../modules/ec2"
   env    = "dev"
@@ -56,6 +66,7 @@ module "ec2_private_1" {
   iam_instance_profile = module.iam.ec2_instance_profile
   key_secret_name      = module.ec2_key_secret.secret_id
 }
+
 module "ec2_private_2" {
   source = "../../modules/ec2"
   env    = "dev"
@@ -67,40 +78,42 @@ module "ec2_private_2" {
   key_secret_name      = module.ec2_key_secret.secret_id
 }
 
-
-# --------------------------
-# 2 Public EC2
-# --------------------------
-
+##########################################################
+# IAM Module
+##########################################################
 module "iam" {
   source = "../../modules/iam"
+  env    = "dev"
+  prefix = "fdx"
 
-  env         = "dev"
-  prefix      = "fdx"
   tags = {
     Project = "fedex"
     Env     = "dev"
   }
-  # Optionally provide specific secret ARNs you want nodes to read
-  secrets_arns = [module.ec2_key_secret.secret_arn]  # if you want to restrict
+
+  secrets_arns = [module.ec2_key_secret.secret_arn]
 }
-##########2938################
-# S3 bucket(s)
+
+##########################################################
+# S3 Module
+##########################################################
 module "s3" {
   source = "../../modules/s3"
   buckets = {
-    logs = { name = "fdx-dev-alb-logs" }
+    logs      = { name = "fdx-dev-alb-logs" }
     artifacts = { name = "fdx-dev-artifacts" }
   }
   default_tags = { Project = "fedex", Env = "dev" }
 }
 
-# S3 Access Points (map keys refer to keys in s3.buckets)
+##########################################################
+# S3 Access Point Module (corrected for tags)
+##########################################################
 module "s3_ap" {
   source = "../../modules/s3-accesspoint"
   vpc_id = module.vpc.vpc_id
   bucket_map = {
-    logs = module.s3.buckets["logs"]
+    logs      = module.s3.buckets["logs"]
     artifacts = module.s3.buckets["artifacts"]
   }
   access_points = {
@@ -110,7 +123,15 @@ module "s3_ap" {
   default_tags = { Project = "fedex", Env = "dev" }
 }
 
-# ECR (12 microservices)
+resource "aws_s3control_access_point_tag" "this" {
+  for_each = module.s3_ap.access_points
+  access_point_arn = each.value.arn
+  tags = merge(module.s3_ap.default_tags, { Name = each.key })
+}
+
+##########################################################
+# ECR Module
+##########################################################
 module "ecr" {
   source = "../../modules/ecr"
   services = [
@@ -120,14 +141,13 @@ module "ecr" {
   tags = { Project = "fedex", Env = "dev" }
 }
 
-# RDS - example map; pass passwords from secrets manager or module.secrets outputs
-
-
+##########################################################
+# RDS Secrets
+##########################################################
 module "rds_svc1_secret" {
   source = "../../modules/secrets"
   env = "dev"
   secret_name = "svc1-db-creds"
-  # store JSON string with username/password
   secret_value = jsonencode({
     username = "svc1admin"
     password = "ChangeThisToSomethingSecure!"
@@ -143,10 +163,14 @@ module "rds_svc2_secret" {
     password = "ChangeThisToo!"
   })
 }
+
+##########################################################
+# RDS Module
+##########################################################
 module "rds" {
-  source = "../../modules/rds"
-  env = "dev"
-  private_subnet_ids = module.vpc.private_subnets
+  source                = "../../modules/rds"
+  env                   = "dev"
+  private_subnet_ids    = module.vpc.private_subnets
   db_security_group_ids = [module.sg.private_sg_id]
   databases = {
     svc1 = { db_name = "svc1db", secret_arn = module.rds_svc1_secret.secret_arn }
@@ -155,18 +179,19 @@ module "rds" {
   tags = { Project = "fedex", Env = "dev" }
 }
 
-
-
-# Route53 private hosted zone
+##########################################################
+# Route53
+##########################################################
 module "route53" {
-  source = "../../modules/r53"
+  source    = "../../modules/r53"
   zone_name = "internal.fdx.local"
-  vpc_id = module.vpc.vpc_id
-  tags = { Project = "fedex", Env = "dev" }
+  vpc_id    = module.vpc.vpc_id
+  tags      = { Project = "fedex", Env = "dev" }
 }
+
 resource "aws_route53_record" "api_alias" {
   zone_id = module.route53.zone_id
-  name    = "api.internal.fdx.local"   # adjust to the hostname you want
+  name    = "api.internal.fdx.local"
   type    = "A"
 
   alias {
@@ -176,102 +201,98 @@ resource "aws_route53_record" "api_alias" {
   }
 }
 
-
-# ACM certificate for internal domain (validated in private zone)
+##########################################################
+# ACM + ALB
+##########################################################
 module "acm" {
-  source = "../../modules/acm"
-  domain_name = "api.internal.fdx.local"
-  sans = []
+  source          = "../../modules/acm"
+  domain_name     = "api.internal.fdx.local"
+  sans            = []
   route53_zone_id = module.route53.zone_id
-  tags = { Project = "fedex", Env = "dev" }
+  tags            = { Project = "fedex", Env = "dev" }
 }
-# Ensure ALB gets the certificate ARN from ACM
+
 module "alb" {
-  source = "../../modules/internal-alb"
-  name = "fdx-internal"
-  subnets = module.vpc.public_subnets
-  security_groups = [module.sg.public_sg_id]
-  vpc_id = module.vpc.vpc_id
-  target_port = 8080
-  certificate_arn = module.acm.certificate_arn   # TLS cert from ACM
-  enable_http = false                             # optional: force HTTPS only
-  tags = { Project = "fedex", Env = "dev" }
+  source            = "../../modules/internal-alb"
+  name              = "fdx-internal"
+  subnets           = module.vpc.public_subnets
+  security_groups   = [module.sg.public_sg_id]
+  vpc_id            = module.vpc.vpc_id
+  target_port       = 8080
+  certificate_arn   = module.acm.certificate_arn
+  enable_http       = false
+  tags              = { Project = "fedex", Env = "dev" }
 }
 
-# Route53 alias record to ALB (private)
-
-
-# Internal ALB
-
-
-# VPC Endpoints (use private subnets and an endpoint security group)
+##########################################################
+# VPC Endpoint
+##########################################################
 resource "aws_security_group" "endpoint_sg" {
-  name = "endpoint-sg-dev"
+  name   = "endpoint-sg-dev"
   vpc_id = module.vpc.vpc_id
+
   egress {
-  from_port   = 0
-  to_port     = 0
-  protocol    = "-1"
-  cidr_blocks = ["0.0.0.0/0"]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [module.vpc.vpc_cidr]
+  }
 }
 
-ingress {
-  from_port   = 443
-  to_port     = 443
-  protocol    = "tcp"
-  cidr_blocks = [module.vpc.vpc_cidr]
-}
-
-}
 module "vpc_endpoints" {
   source = "../../modules/vpc-endpoint"
   vpc_id = module.vpc.vpc_id
   region = "ap-south-1"
   subnet_ids = module.vpc.private_subnets
-  public_route_table_ids = [aws_route_table.public.id] # if you create route tables; else pass []
+  public_route_table_ids = [] # empty if no route table
   endpoint_sg_ids = [aws_security_group.endpoint_sg.id]
 }
 
-# EKS control plane only
+##########################################################
+# EKS Modules
+##########################################################
 module "eks" {
-  source = "../../modules/eks"
-  cluster_name = "fdx-dev-eks"
-  cluster_role_arn = module.iam.eks_cluster_role_arn
-  private_subnet_ids = module.vpc.private_subnets
+  source                 = "../../modules/eks"
+  cluster_name           = "fdx-dev-eks"
+  cluster_role_arn       = module.iam.eks_cluster_role_arn
+  private_subnet_ids     = module.vpc.private_subnets
   endpoint_private_access = true
-  endpoint_public_access = false
-  kubeconfig_path = "/tmp"
+  endpoint_public_access  = false
+  kubeconfig_path        = "/tmp"
 }
-# EKS managed node groups
-module "eks_nodegroups" {
-  source = "../../modules/node-group"
 
+data "aws_secretsmanager_secret_version" "keypair" {
+  secret_id = module.ec2_key_secret.secret_id
+}
+
+module "eks_nodegroups" {
+  source       = "../../modules/node-group"
   cluster_name = module.eks.cluster_name
-  node_role_arn = module.iam.eks_node_role_arn   # from iam module
-  subnet_ids = module.vpc.private_subnets
+  node_role_arn = module.iam.eks_node_role_arn
+  subnet_ids   = module.vpc.private_subnets
 
   node_groups = {
     managed-default = {
-      desired_size  = 2
-      min_size      = 1
-      max_size      = 3
-      instance_types= ["t3.medium"]
-      # If you want SSH access to nodes (not recommended), provide key name:
-      ec2_ssh_key = module.ec2_key_secret.secret_string == "" ? null : jsondecode(data.aws_secretsmanager_secret_version.keypair.secret_string) # OPTIONAL
+      desired_size   = 2
+      min_size       = 1
+      max_size       = 3
+      instance_types = ["t3.medium"]
+      ec2_ssh_key    = data.aws_secretsmanager_secret_version.keypair.secret_string
     }
   }
   tags = { Project = "fedex", Env = "dev" }
 }
 
-
-# ACM + Route53: ACM DNS validation will create records in the private zone; ensure the zone is present and the ALLOW_RECORD_CREATION permissions exist for the Terraform principal.
-
-# Secrets format: RDS secrets must be JSON { "username": "...", "password": "..." }. The secrets module earlier uses secret_value which we set with jsonencode(...).
-
-# EKS node group & IAM: Use module.iam.eks_node_role_arn for node_role_arn. Confirm AmazonEKSWorkerNodePolicy, AmazonEKS_CNI_Policy, AmazonEC2ContainerRegistryReadOnly, and AmazonSSMManagedInstanceCore are attached (the provided modules/iam attaches these).
-
-# VPC endpoints: Ensure you created endpoint SG that allows 443 to/from the VPC; you already created aws_security_group.endpoint_sg in example.
-
-# Terraform provider & versions: Keep provider versions compatible (hashicorp/aws ~> 5.x recommended).
-
-# Replace placeholders: Update domain api.internal.fdx.local, secret names, passwords, tags and region to match your environment.
+##########################################################
+# Outputs
+##########################################################
+output "eks_kubeconfig_file" {
+  value = "${module.eks.kubeconfig_path}/${module.eks.cluster_name}_kubeconfig"
+}
