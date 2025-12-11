@@ -1,6 +1,10 @@
-output "cluster_name" {
-  value = aws_eks_cluster.this.name
+output "kubeconfig_path" {
+  value = var.kubeconfig_path
 }
+output "cluster_name" {
+  value = var.cluster_name
+}
+
 output "cluster_endpoint" {
   value = aws_eks_cluster.this.endpoint
 }
@@ -9,4 +13,11 @@ output "cluster_certificate" {
 }
 output "cluster_arn" {
   value = aws_eks_cluster.this.arn
+}
+output "kubeconfig_path" {
+  value = var.kubeconfig_path
+}
+
+output "cluster_name" {
+  value = var.cluster_name
 }

@@ -8,5 +8,4 @@ resource "aws_s3_access_point" "this" {
     vpc_id = var.vpc_id
   }
 
-  tags = merge(var.default_tags, { Name = each.key })
 }
